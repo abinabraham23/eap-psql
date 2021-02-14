@@ -1,0 +1,67 @@
+# Below secrets are set for postgresql database user/credentials.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: psql-credentials
+stringData:
+  psql_user: postgres
+  psql_passwd: admin
+  psql_database: pg_database
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: psql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: psql
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: psql
+    spec:
+      containers:
+      - name: psql
+        image: postgres:13
+        imagePullPolicy: IfNotPresent
+        env:
+          - name: POSTGRES_USER
+            valueFrom:
+              secretKeyRef:
+                name: psql-credentials
+                key: psql_user
+          - name: POSTGRES_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: psql-credentials
+                key: psql_passwd
+          - name: POSTGRES_DB
+            valueFrom:
+              secretKeyRef:
+                name: psql-credentials
+                key: psql_database
+        ports:
+        - containerPort: 5432
+        resources:
+          requests:
+            cpu: 750m
+          limits:
+            cpu: 1000m
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: psql
+spec:
+  type: NodePort
+  ports:
+  - port: 5432
+    nodePort: 30007
+  selector:
+    app: psql

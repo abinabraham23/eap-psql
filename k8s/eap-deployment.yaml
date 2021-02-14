@@ -1,0 +1,94 @@
+# Below config-map is used to set the JAVA_OPTS as environment variable.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eap72-java-opts
+data:
+  ## This will override the default settings with below options specified. 
+  java_opts: "-Xms250m -Xmx500m -XX:+UnlockExperimentalVMOptions -XX:+UseCGroupMemoryLimitForHeap -Djava.net.preferIPv4Stack=true"
+---
+# Below config-map is used to set the Hostname and port of psql database container.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eap72-psql
+data:
+  # replace the below ip address with minikube ip
+  psqlhost: "192.168.49.2"
+  psqlport: "30007"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eap72
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: eap72
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: eap72
+    spec:
+      containers:
+      - name: eap72
+        image: eap72-psql:latest
+        imagePullPolicy: IfNotPresent
+        env:
+          - name: JAVA_OPTS
+            valueFrom:
+              configMapKeyRef:
+                name: eap72-java-opts
+                key: java_opts
+          - name: PSQLHOST
+            valueFrom:
+              configMapKeyRef:
+                name: eap72-psql
+                key: psqlhost
+          - name: PSQLPORT
+            valueFrom:
+              configMapKeyRef:
+                name: eap72-psql
+                key: psqlport
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            cpu: 750m
+          limits:
+            cpu: 1000m
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eap72
+spec:
+  type: NodePort
+  ports:
+  - port: 8080
+  selector:
+    app: eap72
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: eap72-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+spec:
+  rules:
+    - host: eap72-test.info
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: eap72
+                port:
+                  number: 8080
